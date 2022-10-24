@@ -1,0 +1,6 @@
+[build]
+target = "armv7a-none-eabi"
+
+[target.armv7a-none-eabi]
+linker = "/usr/local/bin/arm-none-eabi-ld"
+rustflags = "-C link-args=--script=/Users/pdel/zazo/link.ld -C target-cpu=cortex-a7"
