@@ -9,7 +9,7 @@ mtd = $(dst)/bmc.mtd
 all: $(mtd)
 
 $(mtd): $(bin)
-	dd if=/dev/zero of=$(mtd) bs=1m count=128
+	dd if=/dev/zero of=$(mtd) bs=1M count=128
 	dd if=$(bin) of=$(mtd) bs=1k conv=notrunc
 
 $(bin): $(elf) 

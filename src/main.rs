@@ -38,8 +38,9 @@ fn print(msg: &str) {
 
 #[no_mangle]
 pub extern "C" fn main() -> ! {
-    print("hello world\n");
-    loop {}
+    loop {
+        print("hello world\n");
+    }
 }
 
 #[panic_handler]
