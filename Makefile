@@ -1,7 +1,7 @@
-arch = armv7a-none-eabi
+arch = arm-none-eabi
 cpu = cortex-a7
 mode = debug
-dst = target/$(arch)/$(mode)
+dst = target/armv7a-none-eabi/$(mode)
 elf = $(dst)/bmc
 bin = $(dst)/bmc.bin
 mtd = $(dst)/bmc.mtd
