@@ -6,7 +6,10 @@ elf = $(dst)/bmc
 bin = $(dst)/bmc.bin
 mtd = $(dst)/bmc.mtd
 
-all: $(mtd)
+all: $(mtd) uart5.bin
+
+uart5.bin: $(bin) gen_uart_booting_image.sh
+	gen_uart_booting_image.sh $(bin) $@
 
 $(mtd): $(bin)
 	dd if=/dev/zero of=$(mtd) bs=1M count=128
