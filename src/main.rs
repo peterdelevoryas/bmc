@@ -1,66 +1,70 @@
 #![no_std]
 #![no_main]
+#![feature(ptr_as_uninit)]
 
+use core::arch::asm;
 use core::arch::global_asm;
 use core::ptr;
 use core::panic::PanicInfo;
 
-trait Uart {
-    const BASE_ADDR: u32;
-    const UART_FCR: u32;
-    const UART_LSR: u32;
+const UART1: u32 = 0x1E78_3000;
+const UART2: u32 = 0x1E78_D000;
+const UART3: u32 = 0x1E78_E000;
+const UART4: u32 = 0x1E78_F000;
+const UART5: u32 = 0x1E78_4000;
+const UART6: u32 = 0x1E79_0000;
+const UART7: u32 = 0x1E79_0100;
+const UART8: u32 = 0x1E79_0200;
+const UART9: u32 = 0x1E79_0300;
+const UART10: u32 = 0x1E79_0400;
+const UART11: u32 = 0x1E79_0500;
+const UART12: u32 = 0x1E79_0600;
+const UART13: u32 = 0x1E79_0700;
 
-    fn init(&mut self) {
-        unsafe {
-            // Enable UART FIFO
-            ptr::write_volatile(Self::UART_FCR as *mut u32, 1 as u32);
-        }
-    }
+const UART_RBR: u32 = 0x00;
+const UART_THR: u32 = 0x00;
+const UART_IER: u32 = 0x04;
+const UART_IIR: u32 = 0x08;
+const UART_FCR: u32 = 0x08;
+const UART_LCR: u32 = 0x0C;
+const UART_MCR: u32 = 0x10;
+const UART_LSR: u32 = 0x14;
+const UART_MSR: u32 = 0x18;
+const UART_SCR: u32 = 0x1C;
 
-    fn tx_ready(&mut self) -> u8 {
-        let r = unsafe {
-            ptr::read_volatile(Self::UART_LSR as *const u32) & 0x40
-        };
-        r as u8
-    }
-
-    fn tx(&mut self, b: u8) {
-        unsafe {
-            ptr::write_volatile(Self::BASE_ADDR as *mut u32, b as u32);
-        }
-    }
-
-    fn rx(&mut self) -> u8 {
-        let r = unsafe {
-            ptr::read_volatile(Self::BASE_ADDR as *const u32)
-        };
-        r as u8
-    }
+#[repr(C)]
+struct Uart {
+    rbr_thr: u32,
+    ier: u32,
+    fcr: u32,
+    lcr: u32,
+    mcr: u32,
+    lsr: u32,
 }
 
-pub struct Uart5;
+impl Uart {
+    fn print(&mut self, msg: &str) {
+        self.write(msg.as_bytes());
+    }
 
-impl Uart for Uart5 {
-    const BASE_ADDR: u32 = 0x1e78_4000;
-    const UART_FCR: u32 = 0x1e78_4008;
-    const UART_LSR: u32 = 0x1e78_4014;
-}
-
-global_asm!(include_str!("start.S"));
-
-fn print(msg: &str) {
-    for &b in msg.as_bytes() {
-        while Uart5.tx_ready() == 0 {
+    fn write(&mut self, bytes: &[u8]) {
+        for &b in bytes {
+            while self.lsr & 0b01000000 == 0 {
+            }
+            self.rbr_thr = b as u32;
         }
-        Uart5.tx(b);
     }
 }
 
 #[no_mangle]
-pub extern "C" fn main() -> ! {
-    Uart5.init();
+pub extern "C" fn main(cpuid: i32) -> ! {
+    let uart5 = UART5 as *mut Uart;
+    let uart5 = unsafe { &mut *uart5 };
+
+    uart5.fcr = 1;
+    uart5.write(&[b'0' + cpuid as u8]);
+
     loop {
-        print("hello world\r\n");
     }
 }
 
@@ -68,3 +72,5 @@ pub extern "C" fn main() -> ! {
 fn panic(_: &PanicInfo) -> ! {
     loop {}
 }
+
+global_asm!(include_str!("start.S"));
