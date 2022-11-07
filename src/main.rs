@@ -1,6 +1,7 @@
 #![no_std]
 #![no_main]
-#![feature(ptr_as_uninit)]
+#![feature(ptr_as_uninit, const_mut_refs)]
+#![allow(warnings)]
 
 use core::arch::asm;
 use core::arch::global_asm;
@@ -101,8 +102,7 @@ impl Uart {
 
 #[no_mangle]
 pub extern "C" fn main(cpuid: i32) -> ! {
-    let uart5 = UART5 as *mut Uart;
-    let uart5 = unsafe { &mut *uart5 };
+    let uart5 = unsafe { &mut *(UART5 as *mut Uart) };
 
     uart5.fcr.set_field(ENABLE_UART_FIFO, 1);
     uart5.print("hello world\r\n");
