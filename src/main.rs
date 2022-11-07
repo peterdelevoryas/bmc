@@ -6,6 +6,7 @@ use core::arch::asm;
 use core::arch::global_asm;
 use core::ptr;
 use core::panic::PanicInfo;
+use core::ops::RangeInclusive;
 
 const UART1: u32 = 0x1E78_3000;
 const UART2: u32 = 0x1E78_D000;
@@ -32,27 +33,69 @@ const UART_LSR: u32 = 0x14;
 const UART_MSR: u32 = 0x18;
 const UART_SCR: u32 = 0x1C;
 
+type Bitfield = RangeInclusive<u8>;
+
+const TRANSMITTER_EMPTY: Bitfield = 6..=6;
+const ENABLE_UART_FIFO: Bitfield = 0..=0;
+
+fn bitmask(field: Bitfield) -> u32 {
+    (1 << (field.end() - field.start() + 1)) - 1
+}
+
+struct Reg32 {
+    value: u32,
+}
+
+impl Reg32 {
+    fn get(&self) -> u32 {
+        unsafe { ptr::read_volatile(&self.value) }
+    }
+
+    fn set(&mut self, value: u32) {
+        unsafe { ptr::write_volatile(&mut self.value, value) }
+    }
+
+    fn field(&self, field: Bitfield) -> u32 {
+        let mut v = self.get();
+        v >>= field.start();
+        v &= bitmask(field);
+        v
+    }
+
+    fn set_field(&mut self, field: Bitfield, value: u32) {
+        let mut v = self.get();
+        let mask = bitmask(field.clone());
+        v &= !(mask << field.start());
+        v |= (value & mask) << field.start();
+        self.set(v);
+    }
+}
+
 #[repr(C)]
 struct Uart {
-    rbr_thr: u32,
-    ier: u32,
-    fcr: u32,
-    lcr: u32,
-    mcr: u32,
-    lsr: u32,
+    rbr_thr: Reg32,
+    ier: Reg32,
+    fcr: Reg32,
+    lcr: Reg32,
+    mcr: Reg32,
+    lsr: Reg32,
 }
 
 impl Uart {
-    fn print(&mut self, msg: &str) {
-        self.write(msg.as_bytes());
+    fn tx_empty(&self) -> bool {
+        self.lsr.field(TRANSMITTER_EMPTY) == 1
     }
 
-    fn write(&mut self, bytes: &[u8]) {
-        for &b in bytes {
-            while self.lsr & 0b01000000 == 0 {
-            }
-            self.rbr_thr = b as u32;
+    fn print(&mut self, msg: &str) {
+        for &b in msg.as_bytes() {
+            self.push(b);
         }
+    }
+
+    fn push(&mut self, b: u8) {
+        while !self.tx_empty() {
+        }
+        self.rbr_thr.set(b as u32);
     }
 }
 
@@ -61,8 +104,8 @@ pub extern "C" fn main(cpuid: i32) -> ! {
     let uart5 = UART5 as *mut Uart;
     let uart5 = unsafe { &mut *uart5 };
 
-    uart5.fcr = 1;
-    uart5.write(&[b'0' + cpuid as u8]);
+    uart5.fcr.set_field(ENABLE_UART_FIFO, 1);
+    uart5.print("hello world\r\n");
 
     loop {
     }

@@ -18,7 +18,7 @@ $(mtd): $(bin)
 $(bin): $(elf) 
 	cargo objcopy -- -O binary $@
 
-$(elf): src/main.rs src/start.S link.ld
+$(elf): Cargo.toml .cargo/config src/main.rs src/start.S link.ld
 	cargo build
 
 .PHONY: objdump qemu
