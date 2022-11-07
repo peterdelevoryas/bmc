@@ -36,18 +36,16 @@ const UART_SCR: u32 = 0x1C;
 
 type Bitfield = RangeInclusive<u8>;
 
-const TRANSMITTER_EMPTY: Bitfield = 6..=6;
-const ENABLE_UART_FIFO: Bitfield = 0..=0;
-
 fn bitmask(field: Bitfield) -> u32 {
     (1 << (field.end() - field.start() + 1)) - 1
 }
 
-struct Reg32 {
+#[repr(C)]
+struct Reg {
     value: u32,
 }
 
-impl Reg32 {
+impl Reg {
     fn get(&self) -> u32 {
         unsafe { ptr::read_volatile(&self.value) }
     }
@@ -72,19 +70,50 @@ impl Reg32 {
     }
 }
 
+
+struct RegField<const START: u8, const END: u8>;
+
+impl<const START: u8, const END: u8> RegField<START, END> {
+    fn get(&self) -> u32 {
+        let ptr = self as *const Self as *const u32;
+        let mut reg = unsafe { ptr::read_volatile(ptr) };
+        reg >>= START;
+        reg &= bitmask(START..=END);
+        reg
+    }
+
+    fn set(&mut self, v: u32) {
+        let ptr = self as *mut Self as *mut u32;
+        let mut reg = unsafe { ptr::read_volatile(ptr) };
+        let mask = bitmask(START..=END);
+        reg &= !(mask << START);
+        reg |= (v & mask) << START;
+        unsafe { ptr::write_volatile(ptr, reg); }
+    }
+}
+
 #[repr(C)]
 struct Uart {
-    rbr_thr: Reg32,
-    ier: Reg32,
-    fcr: Reg32,
-    lcr: Reg32,
-    mcr: Reg32,
-    lsr: Reg32,
+    rbr_thr: RbrThr,
+    ier: Ier,
+    fcr: Fcr,
+    lcr: Reg,
+    mcr: Reg,
+    lsr: Lsr,
 }
 
 impl Uart {
-    fn tx_empty(&self) -> bool {
-        self.lsr.field(TRANSMITTER_EMPTY) == 1
+    fn print_reg(&mut self, reg: u32) {
+        self.print("0x");
+        for i in (0..8).rev() {
+            let shift = i * 4;
+            let b = (reg >> shift) as u8;
+            let b = match b {
+                0..=9 => b'0' + b,
+                _ => b'a' + b,
+            };
+            self.push(b);
+        }
     }
 
     fn print(&mut self, msg: &str) {
@@ -94,19 +123,47 @@ impl Uart {
     }
 
     fn push(&mut self, b: u8) {
-        while !self.tx_empty() {
+        while self.lsr.transmitter_empty.get() == 0 {
         }
-        self.rbr_thr.set(b as u32);
+        self.rbr_thr.thr.set(b as u32);
     }
+}
+
+#[repr(C)]
+struct RbrThr {
+    rbr: RegField<0, 8>,
+    thr: RegField<0, 8>,
+    reg: Reg,
+}
+
+#[repr(C)]
+struct Fcr {
+    enable_uart_fifo: RegField<0, 0>,
+    reg: Reg,
+}
+
+#[repr(C)]
+struct Ier {
+    enable_received_data_available_interrupt: RegField<0, 0>,
+    reg: Reg,
+}
+
+#[repr(C)]
+struct Lsr {
+    transmitter_empty: RegField<6, 6>,
+    reg: Reg,
 }
 
 #[no_mangle]
 pub extern "C" fn main(cpuid: i32) -> ! {
     let uart5 = unsafe { &mut *(UART5 as *mut Uart) };
 
-    uart5.fcr.set_field(ENABLE_UART_FIFO, 1);
-    uart5.print("hello world\r\n");
+    uart5.fcr.enable_uart_fifo.set(1);
+    uart5.print("hello world\n");
 
+    uart5.ier.enable_received_data_available_interrupt.set(1);
+    uart5.print_reg(uart5.ier.reg.get());
+    uart5.push(b'\n');
     loop {
     }
 }
